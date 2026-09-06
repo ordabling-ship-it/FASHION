@@ -1,0 +1,6 @@
+{
+  "name": "VTON Studio - AI Fashion Reel & Marketplace Seller",
+  "description": "SaaS platform combining AI Virtual Try-On (VTON), 9:16 dynamic video reel generation, Stripe BLIK & Apple Pay checkout, and automated Vinted & OLX multichannel listing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
