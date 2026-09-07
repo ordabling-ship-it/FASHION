@@ -45,7 +45,10 @@ app.post('/api/vton/generate', async (req, res) => {
       return res.status(400).json({ error: 'Brak zdjęcia ubrania (garmentImageUrl)' });
     }
 
-    console.log(`[AI Pipeline] Rozpoczęto generowanie VTON + 9:16 Wideo dla "${title}"...`);
+    // Normalize title up front — used for hashing below, so it must never be undefined/empty.
+    const safeTitle = typeof title === 'string' && title.trim() ? title : 'Nowy Przedmiot z Rolką AI';
+
+    console.log(`[AI Pipeline] Rozpoczęto generowanie VTON + 9:16 Wideo dla "${safeTitle}"...`);
     console.log(`[AI Pipeline] Parametry: Provider=${aiProvider}, Model=${modelArchetype}, Motion=${motionStyle}`);
 
     // If live Replicate API token or Fal.ai key is set, we can integrate the external webhook
@@ -70,13 +73,13 @@ app.post('/api/vton/generate', async (req, res) => {
     ];
 
     // Pick consistent asset based on hash
-    const index = Math.abs(title.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % videoReelsPool.length;
+    const index = Math.abs(safeTitle.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % videoReelsPool.length;
     const selectedVideoUrl = videoReelsPool[index];
     const selectedTryOnPhotoUrl = modelFittingPhotos[index];
 
     const generatedProduct = {
       id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      title: title || 'Nowy Przedmiot z Rolką AI',
+      title: safeTitle,
       description: description || 'Ubranie zaprezentowane przez modela AI w dynamicznej rolce wideo 9:16.',
       pricePln: Number(pricePln) || 199.00,
       size: size || 'M',
