@@ -6,7 +6,7 @@ name + price overlay), plus script, caption/hashtags and metadata.
 
 ```
 input/red-dress/front.jpg ─┐
-input/red-dress/back.jpg  ─┤  1 analyze (Gemini) → 2 try-on (Fal.ai / Replicate) → 3 script (Gemini)
+input/red-dress/back.jpg  ─┤  0 prepare (sharp) → 1 analyze (Gemini) → 2 try-on (Fal.ai / Replicate) → 3 script (Gemini + TikTok trends)
 input/jeans_front.png     ─┘  → 4 voice (ElevenLabs) → 5 lip-sync (Fal.ai) → 6 render (ffmpeg) → 7 output
                                                                      ↓
                     output/red-dress/{reel.mp4, script.txt, caption.txt, metadata.json, originals/}
@@ -44,6 +44,31 @@ Set `DEMO_MODE=false` and provide keys (startup fails with a clear message if on
 `MODEL_AVATAR_PATH` is a full-body photo of the model who "wears" the clothes. With
 `LIPSYNC_PROVIDER=none` the reel is the try-on image with a slow zoom + voiceover.
 
+## Two ways to add clothes (pick either)
+
+1. **Folder on your computer** — drop photos into `INPUT_DIR` (watched while `npm run dev` runs, or
+   process once with `npm run reels`).
+2. **Upload up to 5 photos at once** — "Rolki" tab → *Wybierz lub upuść do 5 zdjęć* (or
+   `POST /api/uploads`, multipart field `photos`, optional `name`, `price`, `currency`, `language`, `notes`).
+   All photos in one upload = one item. More than `UPLOAD_MAX_FILES` or non-image files are rejected.
+
+## Automatic image conversion
+
+The first pipeline step (`prepare`) makes every photo safe for Gemini, the VTON models and ffmpeg:
+EXIF auto-rotate, long side ≤ `IMAGE_MAX_SIDE` (2048 px), JPEG/WebP ≤ `IMAGE_MAX_BYTES` (4 MB; quality and
+then size are reduced until it fits). HEIC/HEIF from iPhones is decoded with `heic-convert` (the prebuilt
+`sharp` has no HEVC decoder). Files that are already fine are used as-is. Originals are never modified and
+are copied to `output/<item>/originals/`.
+
+## Trending hooks
+
+Before writing the script, the `trends` module asks Gemini **with Google Search grounding** what hook
+formats and hashtags are currently trending in TikTok fashion content for `TRENDS_REGION` (default `PL`).
+The result is cached for 24 h in `DATA_DIR/trends.json` per region+language. If the search fails, a stale
+cached result is used, otherwise a curated list of proven hook templates. The script prompt gets the top
+hook styles (adapt one, don't copy) and trending hashtags; up to 5 trending hashtags are merged into the
+caption. `GET /api/trends` shows the current set. In DEMO_MODE the curated list is used (source `mock`).
+
 ## Input folder conventions
 
 - **Subfolder = item**: `input/red-dress/*.jpg`
@@ -77,6 +102,8 @@ progress (no more fake timer).
 | PUT | `/api/items/:id/script` | `{ scriptText }` edit spoken script |
 | POST | `/api/items/:id/regenerate-script` | new script job |
 | POST | `/api/items/:id/render` | TTS → lip-sync → render → output job |
+| POST | `/api/uploads` | multipart `photos` (1–5) + optional fields → one item `{ itemId, jobId }` |
+| GET | `/api/trends` | current trending hooks/hashtags (cached) |
 | POST | `/api/scan` | rescan `INPUT_DIR` |
 | GET | `/api/jobs`, `/api/jobs/:id` | job status, progress, logs |
 | POST | `/api/jobs/:id/retry` | retry a failed job from the failed step |
@@ -105,16 +132,21 @@ src/server/providers/*          provider interfaces + Gemini, Fal, Replicate, El
 src/server/services/pipeline.ts job queue + step orchestration
 src/server/services/render.ts   ffmpeg 1080x1920 renderer (ASS captions/overlays, music mix)
 src/server/services/folder.ts   grouping + info.json
+src/server/services/images.ts   sharp/HEIC normalization
+src/server/services/trends.ts   trending hooks (Gemini + Google Search, 24h cache, curated fallback)
 src/server/services/watcher.ts  chokidar watcher
 src/cli/reels.ts                `npm run reels`
 ```
 
 ## AI transparency (EU AI Act) and likeness rights
 
-- Every reel has a burned-in "Treść wygenerowana przez AI / AI-generated content" label, the MP4
-  `comment` metadata, `#AIgenerated` in the caption and `aiGenerated: true` in `metadata.json`.
-  Also enable the platform's own AI-content label (TikTok/Instagram) when posting. Art. 50 of the
-  EU AI Act requires disclosure of AI-generated/manipulated video and synthetic voices.
+- The label is intentionally **kept but subtle**: a tiny, semi-transparent "Wygenerowano przez AI /
+  AI-generated" text in the bottom-right corner (prefixed with `DEMO •` only in demo mode), plus the MP4
+  `comment` tag and `aiGenerated: true` in `metadata.json`. The caption has no disclosure banner; instead
+  `metadata.json → tiktok` contains `aiGeneratedContent: true` and a note to switch on TikTok's
+  "AI-generated content" toggle when posting. Removing the disclosure entirely is not offered: TikTok's
+  rules require labelling realistic AI-generated content (unlabelled content can be removed or
+  down-ranked), and Art. 50 of the EU AI Act requires disclosure of AI-generated video and synthetic voices.
 - **Likeness rights:** only use a model/avatar photo and a voice you own or have written consent to
   use for commercial, AI-generated advertising (in Poland the image is protected by art. 81 of the
   copyright act and personal rights in art. 23–24 KC). Do not clone a real person's face or voice
