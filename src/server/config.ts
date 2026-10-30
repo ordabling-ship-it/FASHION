@@ -49,6 +49,16 @@ export const EnvSchema = z
     FFMPEG_PATH: z.string().default('ffmpeg'),
     FFPROBE_PATH: z.string().default('ffprobe'),
 
+    TRENDS_ENABLED: bool(true),
+    TRENDS_REGION: z.string().min(2).max(40).default('PL'),
+    TRENDS_TTL_HOURS: z.coerce.number().positive().default(24),
+
+    IMAGE_MAX_SIDE: z.coerce.number().int().min(512).max(8192).default(2048),
+    IMAGE_MAX_BYTES: z.coerce.number().int().min(200_000).default(4_000_000),
+    IMAGE_FORMAT: z.enum(['jpeg', 'webp']).default('jpeg'),
+    UPLOAD_MAX_FILES: z.coerce.number().int().min(1).max(10).default(5),
+    UPLOAD_MAX_FILE_MB: z.coerce.number().positive().max(100).default(30),
+
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(120),
   })
   .superRefine((env, ctx) => {
@@ -102,6 +112,9 @@ export function publicConfig(c: AppConfig) {
       tts: c.DEMO_MODE ? 'mock' : c.TTS_PROVIDER,
       lipsync: c.DEMO_MODE ? 'mock' : c.LIPSYNC_PROVIDER,
     },
+    trends: c.TRENDS_ENABLED ? (c.DEMO_MODE ? 'mock' : 'gemini-search') : 'off',
+    trendsRegion: c.TRENDS_REGION,
+    uploadMaxFiles: c.UPLOAD_MAX_FILES,
     inputDir: c.inputDir,
     outputDir: c.outputDir,
   };

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { FolderSearch, RefreshCw, Film, Wand2, Save, RotateCcw, Loader2 } from 'lucide-react';
+import { UploadPhotosPanel } from './UploadPhotosPanel';
 import { ItemDto, JobDto, PublicConfigDto, STEP_LABELS, reelsApi } from '../lib/reelsApi';
 
 const STATUS_STYLES: Record<ItemDto['status'], string> = {
@@ -75,7 +76,7 @@ export const ReelsDashboard: React.FC<{ config: PublicConfigDto | null }> = ({ c
             <Film className="w-5 h-5" /> Rolki z folderu
           </h1>
           <p className="text-xs text-white/40 font-mono mt-1">
-            Wrzuć zdjęcia do <span className="text-white/70">{config?.inputDir ?? 'INPUT_DIR'}</span> (podfolder lub prefiks nazwy = jeden produkt).
+            Dwie opcje: wrzuć zdjęcia do folderu <span className="text-white/70">{config?.inputDir ?? 'INPUT_DIR'}</span> (podfolder lub prefiks nazwy = jeden produkt).
             Wyniki: <span className="text-white/70">{config?.outputDir ?? 'OUTPUT_DIR'}</span>
           </p>
         </div>
@@ -88,6 +89,15 @@ export const ReelsDashboard: React.FC<{ config: PublicConfigDto | null }> = ({ c
           </button>
         </div>
       </div>
+
+      <UploadPhotosPanel
+        maxFiles={config?.uploadMaxFiles ?? 5}
+        onUploaded={(id) => {
+          setSelectedId(id);
+          setMessage('Wysłano zdjęcia — rolka w przygotowaniu.');
+          void refresh();
+        }}
+      />
 
       {message && <div className="mb-4 text-xs font-mono text-white/70 bg-white/5 border border-white/10 rounded-lg px-3 py-2">{message}</div>}
 
@@ -130,7 +140,9 @@ export const ReelsDashboard: React.FC<{ config: PublicConfigDto | null }> = ({ c
                     <span className="text-white/30 text-xs">Brak podglądu</span>
                   )}
                 </div>
-                <span className="text-[10px] font-mono text-white/40">Treść wygenerowana przez AI • 1080x1920</span>
+                <span className="text-[10px] font-mono text-white/40">
+                  1080x1920{selected.trends ? ` • trendy: ${selected.trends.source} (${selected.trends.region})` : ''}
+                </span>
               </div>
 
               <div className="lg:col-span-5 space-y-4">

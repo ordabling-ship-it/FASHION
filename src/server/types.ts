@@ -35,8 +35,8 @@ export const ItemInfoSchema = z.object({
 });
 export type ItemInfo = z.infer<typeof ItemInfoSchema>;
 
-export type StepName = 'analyze' | 'tryon' | 'script' | 'tts' | 'lipsync' | 'render' | 'output';
-export const ALL_STEPS: StepName[] = ['analyze', 'tryon', 'script', 'tts', 'lipsync', 'render', 'output'];
+export type StepName = 'prepare' | 'analyze' | 'tryon' | 'script' | 'tts' | 'lipsync' | 'render' | 'output';
+export const ALL_STEPS: StepName[] = ['prepare', 'analyze', 'tryon', 'script', 'tts', 'lipsync', 'render', 'output'];
 export type JobKind = 'full' | 'script' | 'render';
 
 export const STEPS_BY_KIND: Record<JobKind, StepName[]> = {
@@ -55,6 +55,9 @@ export interface Item {
   status: ItemStatus;
   createdAt: string;
   updatedAt: string;
+  /** Normalized copies (rotated/resized/JPEG) used by AI + render; originals stay untouched. */
+  workPhotos?: string[];
+  trends?: { source: string; region: string; fetchedAt: string; hookStyles: string[]; hashtags: string[] };
   analysis?: GarmentAnalysis;
   tryOnImagePath?: string;
   script?: ReelScript;

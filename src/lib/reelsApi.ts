@@ -1,6 +1,7 @@
-export type StepName = 'analyze' | 'tryon' | 'script' | 'tts' | 'lipsync' | 'render' | 'output';
+export type StepName = 'prepare' | 'analyze' | 'tryon' | 'script' | 'tts' | 'lipsync' | 'render' | 'output';
 
 export const STEP_LABELS: Record<StepName, { pl: string; detail: string }> = {
+  prepare: { pl: 'Przygotowanie zdjęć', detail: 'Obrót, zmniejszenie i konwersja (HEIC/duże pliki → JPEG).' },
   analyze: { pl: 'Analiza ubrania (Gemini)', detail: 'Kategoria, kolor, materiał, krój, okazje i atuty.' },
   tryon: { pl: 'Wirtualna przymiarka (VTON)', detail: 'Ubranie na modelce AI (Fal.ai / Replicate).' },
   script: { pl: 'Scenariusz influencerki', detail: 'Hook, komplementy, porada stylizacyjna i CTA.' },
@@ -36,6 +37,7 @@ export interface ItemDto {
   analysis?: Record<string, unknown> & { productName: string; category: string; sellingPoints: string[] };
   script?: { hook: string; compliments: string[]; stylingTip: string; callToAction: string; caption: string; hashtags: string[] };
   scriptText?: string;
+  trends?: { source: string; region: string; fetchedAt: string; hookStyles: string[]; hashtags: string[] };
   tryOnImageUrl?: string;
   reelUrl?: string;
   error?: string;
@@ -50,6 +52,9 @@ export interface PublicConfigDto {
   providers: Record<string, string>;
   inputDir: string;
   outputDir: string;
+  trends: string;
+  trendsRegion: string;
+  uploadMaxFiles: number;
 }
 
 async function json<T>(res: Response): Promise<T> {
@@ -73,5 +78,11 @@ export const reelsApi = {
     }).then((r) => json<{ item: ItemDto }>(r)),
   regenerateScript: (id: string) => fetch(`/api/items/${id}/regenerate-script`, { method: 'POST' }).then((r) => json<{ job: JobDto }>(r)),
   render: (id: string) => fetch(`/api/items/${id}/render`, { method: 'POST' }).then((r) => json<{ job: JobDto }>(r)),
+  upload: (files: File[], fields: { name?: string; price?: string; language?: string; notes?: string }) => {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('photos', f));
+    Object.entries(fields).forEach(([k, v]) => v && fd.append(k, v));
+    return fetch('/api/uploads', { method: 'POST', body: fd }).then((r) => json<{ itemId: string; jobId: string; photos: number }>(r));
+  },
   retry: (jobId: string) => fetch(`/api/jobs/${jobId}/retry`, { method: 'POST' }).then((r) => json<{ job: JobDto }>(r)),
 };

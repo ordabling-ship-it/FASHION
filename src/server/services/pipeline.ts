@@ -16,8 +16,15 @@ import {
 import { groupFiles, listFilesRecursive, readItemInfoRaw } from './folder';
 import { renderReel } from './render';
 import type { JsonStore } from './store';
+import { normalizeImage } from './images';
+import { mergeHashtags, type TrendsService } from './trends';
 
-const AI_LABEL = { pl: 'Treść wygenerowana przez AI', en: 'AI-generated content' } as const;
+// Small, low-opacity corner label (TikTok AIGC policy + EU AI Act Art. 50). Kept in real mode, without "DEMO".
+const AI_LABEL = { pl: 'Wygenerowano przez AI', en: 'AI-generated' } as const;
+const TIKTOK_AIGC_NOTE = {
+  pl: 'Przy publikacji włącz w TikToku „Treści generowane przez AI” (Więcej opcji → AI-generated content).',
+  en: 'When posting, turn on TikTok\'s "AI-generated content" toggle (More options → AI-generated content).',
+} as const;
 
 export class ReelPipeline extends EventEmitter {
   private running = false;
@@ -29,6 +36,7 @@ export class ReelPipeline extends EventEmitter {
     private store: JsonStore,
     private providers: Providers,
     private log: (msg: string) => void = (m) => console.log(m),
+    private trends?: TrendsService,
   ) {
     super();
     // Resume jobs interrupted by a restart.
@@ -87,7 +95,7 @@ export class ReelPipeline extends EventEmitter {
 
   enqueue(itemId: string, kind: JobKind): Job {
     if (!this.store.getItem(itemId)) throw new Error(`Unknown item ${itemId}`);
-    const steps = kind === 'full' && this.config.REVIEW_BEFORE_RENDER ? STEPS_BY_KIND.full.slice(0, 3) : STEPS_BY_KIND[kind];
+    const steps = kind === 'full' && this.config.REVIEW_BEFORE_RENDER ? STEPS_BY_KIND.full.slice(0, STEPS_BY_KIND.full.indexOf('script') + 1) : STEPS_BY_KIND[kind];
     const now = new Date().toISOString();
     const job: Job = {
       id: `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -217,16 +225,32 @@ export class ReelPipeline extends EventEmitter {
     const p = this.providers;
 
     switch (step) {
-      case 'analyze': {
+      case 'prepare': {
         if (!item.photos.length) throw new Error('Item has no photos');
-        const analysis = await p.analysis.analyzeGarment(item.photos.map(toImageInput), item.info);
+        const workPhotos: string[] = [];
+        for (const photo of item.photos) {
+          const r = await normalizeImage(photo, path.join(work, 'normalized'), {
+            maxSide: this.config.IMAGE_MAX_SIDE,
+            maxBytes: this.config.IMAGE_MAX_BYTES,
+            format: this.config.IMAGE_FORMAT,
+          });
+          if (r.converted) this.log(`[reels] ${itemId}: converted ${path.basename(photo)} → ${path.basename(r.path)}`);
+          workPhotos.push(r.path);
+        }
+        this.store.patchItem(itemId, { workPhotos });
+        break;
+      }
+      case 'analyze': {
+        const photos = item.workPhotos ?? item.photos;
+        if (!photos.length) throw new Error('Item has no photos');
+        const analysis = await p.analysis.analyzeGarment(photos.map(toImageInput), item.info);
         const name = item.info.name ?? (p.analysis.name === 'mock' ? item.name : analysis.productName);
         this.store.patchItem(itemId, { analysis, name });
         break;
       }
       case 'tryon': {
         const tryOnImagePath = await p.tryOn.tryOn({
-          garment: toImageInput(item.photos[0]),
+          garment: toImageInput((item.workPhotos ?? item.photos)[0]),
           analysis: item.analysis,
           outPath: path.join(work, 'tryon.png'),
         });
@@ -235,8 +259,15 @@ export class ReelPipeline extends EventEmitter {
       }
       case 'script': {
         if (!item.analysis) throw new Error('Missing analysis');
-        const script = await p.script.writeScript({ analysis: item.analysis, info: item.info, language: this.lang(item) });
-        this.store.patchItem(itemId, { script, scriptText: scriptToText(script) });
+        const language = this.lang(item);
+        let trends: Item['trends'];
+        if (this.trends && this.config.TRENDS_ENABLED) {
+          const t = await this.trends.get(this.config.TRENDS_REGION, language);
+          trends = { source: t.source, region: t.region, fetchedAt: t.fetchedAt, hookStyles: t.hookStyles, hashtags: t.hashtags };
+        }
+        const script = await p.script.writeScript({ analysis: item.analysis, info: item.info, language, trends });
+        if (trends) script.hashtags = mergeHashtags(script.hashtags, trends.hashtags);
+        this.store.patchItem(itemId, { script, scriptText: scriptToText(script), trends });
         break;
       }
       case 'tts': {
@@ -290,7 +321,7 @@ export class ReelPipeline extends EventEmitter {
     const lang = this.lang(item);
     await fs.writeFile(path.join(dir, 'script.txt'), (item.scriptText ?? '') + '\n');
     const caption = item.script
-      ? `${item.script.caption}\n\n${item.script.hashtags.join(' ')} #AIgenerated\n\n${AI_LABEL[lang]}.`
+      ? `${item.script.caption}\n\n${item.script.hashtags.join(' ')}`
       : '';
     await fs.writeFile(path.join(dir, 'caption.txt'), caption + '\n');
 
@@ -328,6 +359,7 @@ export class ReelPipeline extends EventEmitter {
       analysis: item.analysis,
       script: item.script,
       spokenText: item.scriptText,
+      originalsKept: true,
       files: { reel: 'reel.mp4', script: 'script.txt', caption: 'caption.txt', originals: 'originals/' },
       providers: {
         analysis: this.providers.analysis.name,
@@ -338,6 +370,12 @@ export class ReelPipeline extends EventEmitter {
       },
       demoMode: this.config.DEMO_MODE,
       aiGenerated: true,
+      trends: item.trends,
+      tiktok: {
+        aiGeneratedContent: true, // set TikTok's "AI-generated content" label when uploading
+        disclosureNote: TIKTOK_AIGC_NOTE[lang],
+        burnedInLabel: AI_LABEL[lang],
+      },
       aiDisclosure: 'This video, the virtual model, her voice and the script were generated with AI (EU AI Act Art. 50).',
       generatedAt: new Date().toISOString(),
     };

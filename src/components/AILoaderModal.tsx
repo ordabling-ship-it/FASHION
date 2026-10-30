@@ -113,7 +113,7 @@ export const AILoaderModal: React.FC<AILoaderModalProps> = ({ isOpen, config, jo
 
         <div className="mt-4 text-[10px] font-mono text-white/40 flex items-center justify-center gap-1.5">
           {failed ? <AlertTriangle className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5 text-white/40" />}
-          <span>Treść wygenerowana przez AI • postęp z /api/jobs</span>
+          <span>Postęp na żywo z /api/jobs</span>
         </div>
       </div>
     </div>

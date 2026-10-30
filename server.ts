@@ -5,8 +5,8 @@ import { createApp } from './src/server/app';
 import { watchInputFolder } from './src/server/services/watcher';
 
 async function main() {
-  const { config, store, pipeline } = bootstrap();
-  const app = createApp(config, store, pipeline);
+  const { config, store, pipeline, trends } = bootstrap();
+  const app = createApp(config, store, pipeline, trends);
 
   if (config.NODE_ENV !== 'production') {
     // Dev only: vite is a devDependency and is not needed in production.

@@ -49,7 +49,7 @@ describe('pipeline orchestration (mock providers)', () => {
     const job = store.listJobs()[0];
     expect(calls).toBe(config.MAX_RETRIES + 1);
     expect(job.status).toBe('failed');
-    expect(job.completedSteps).toEqual(['analyze']);
+    expect(job.completedSteps).toEqual(['prepare', 'analyze']);
     expect(store.getItem('top')!.status).toBe('failed');
   });
 

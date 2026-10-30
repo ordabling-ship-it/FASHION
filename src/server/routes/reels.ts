@@ -1,7 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
+import type { TrendsService } from '../services/trends';
+import { IMAGE_EXTS } from '../services/folder';
 import type { AppConfig } from '../config';
 import { publicConfig } from '../config';
 import type { ReelPipeline } from '../services/pipeline';
@@ -56,8 +59,72 @@ const wrap =
   (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) =>
     fn(req, res).catch(next);
 
-export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeline) {
+const UPLOAD_MIME = /^image\/(jpeg|png|webp|heic|heif)$/;
+const UploadFields = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  price: z.coerce.number().nonnegative().max(1_000_000).optional(),
+  currency: z.string().trim().max(8).optional(),
+  language: z.enum(['pl', 'en']).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeline, trends?: TrendsService) {
   const r = Router();
+
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { files: c.UPLOAD_MAX_FILES, fileSize: c.UPLOAD_MAX_FILE_MB * 1024 * 1024, fields: 10 },
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      // Phones often send HEIC as application/octet-stream, so accept by extension too.
+      if (UPLOAD_MIME.test(file.mimetype) || IMAGE_EXTS.includes(ext)) cb(null, true);
+      else cb(Object.assign(new Error(`Unsupported file type: ${file.originalname}`), { status: 400 }));
+    },
+  });
+
+  /** Upload 1..UPLOAD_MAX_FILES photos of ONE item (alternative to dropping them into INPUT_DIR). */
+  r.post(
+    '/uploads',
+    (req, res, next) =>
+      upload.array('photos', c.UPLOAD_MAX_FILES)(req, res, (err: any) => {
+        if (err instanceof multer.MulterError) {
+          const msg = err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE' ? `Max ${c.UPLOAD_MAX_FILES} photos per item` : err.message;
+          return next(Object.assign(new Error(msg), { status: 400 }));
+        }
+        next(err);
+      }),
+    wrap(async (req, res) => {
+      const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+      if (!files.length) return res.status(400).json({ error: 'Add at least one photo (field "photos")' });
+      const fields = UploadFields.parse(req.body);
+      const base = slugify(fields.name || path.basename(files[0].originalname, path.extname(files[0].originalname)));
+      let key = base;
+      for (let n = 2; store.getItem(key); n++) key = `${base}-${n}`;
+      const dir = path.join(c.inputDir, key);
+      await fs.mkdir(dir, { recursive: true });
+      const rels: string[] = [];
+      for (const [i, f] of files.entries()) {
+        let ext = path.extname(f.originalname).toLowerCase();
+        if (!IMAGE_EXTS.includes(ext)) ext = `.${f.mimetype.split('/')[1].replace('jpeg', 'jpg')}`;
+        const name = `photo-${i + 1}${ext}`;
+        await fs.writeFile(path.join(dir, name), f.buffer);
+        rels.push(`${key}/${name}`);
+      }
+      await fs.writeFile(path.join(dir, 'info.json'), JSON.stringify(fields, null, 2));
+      await pipeline.ingestItem(key, rels);
+      const job = store.listJobs().find((j) => j.itemId === key);
+      res.status(202).json({ itemId: key, jobId: job?.id, photos: files.length });
+    }),
+  );
+
+  r.get(
+    '/trends',
+    wrap(async (req, res) => {
+      if (!trends || !c.TRENDS_ENABLED) return res.json({ trends: null });
+      const language = z.enum(['pl', 'en']).catch(c.REEL_LANGUAGE).parse(req.query.language);
+      res.json({ trends: await trends.get(c.TRENDS_REGION, language) });
+    }),
+  );
 
   r.get('/config', (_req, res) => res.json(publicConfig(c)));
 

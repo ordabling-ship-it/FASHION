@@ -63,7 +63,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Style: Caption,Sans,78,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,6,2,2,80,80,420,1
 Style: Title,Sans,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H99000000,1,0,0,0,100,100,0,0,3,4,0,8,60,60,140,1
 Style: Price,Sans,72,&H0000E1FF,&H00FFFFFF,&H00000000,&H99000000,1,0,0,0,100,100,0,0,3,4,0,8,60,60,240,1
-Style: AiLabel,Sans,34,&H00FFFFFF,&H00FFFFFF,&H00000000,&H99000000,0,0,0,0,100,100,0,0,3,2,0,7,40,40,40,1
+Style: AiLabel,Sans,24,&H8CFFFFFF,&H8CFFFFFF,&HC0000000,&HFF000000,0,0,0,0,100,100,0,0,1,1,0,3,28,28,24,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

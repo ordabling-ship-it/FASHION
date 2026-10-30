@@ -7,8 +7,9 @@ import type { ReelPipeline } from './services/pipeline';
 import type { JsonStore } from './services/store';
 import { reelsRouter } from './routes/reels';
 import { legacyRouter } from './routes/legacy';
+import type { TrendsService } from './services/trends';
 
-export function createApp(config: AppConfig, store: JsonStore, pipeline: ReelPipeline) {
+export function createApp(config: AppConfig, store: JsonStore, pipeline: ReelPipeline, trends?: TrendsService) {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '25mb' }));
@@ -33,7 +34,7 @@ export function createApp(config: AppConfig, store: JsonStore, pipeline: ReelPip
     });
   });
 
-  app.use('/api', reelsRouter(config, store, pipeline));
+  app.use('/api', reelsRouter(config, store, pipeline, trends));
   app.use('/api', legacyRouter());
   app.use('/media', express.static(config.outputDir, { index: false, dotfiles: 'ignore' }));
 
