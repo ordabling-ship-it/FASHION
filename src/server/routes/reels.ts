@@ -21,6 +21,7 @@ export function itemView(c: AppConfig, item: Item) {
     photos: item.photos.map((p) => path.basename(p)),
     tryOnImageUrl: media(c, item.tryOnImagePath),
     reelUrl: item.reelPath ? `${media(c, item.reelPath)}?v=${encodeURIComponent(item.updatedAt)}` : undefined,
+    workPhotos: undefined,
     tryOnImagePath: undefined,
     voicePath: undefined,
     talkingVideoPath: undefined,
