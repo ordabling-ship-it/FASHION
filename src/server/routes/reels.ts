@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import type { AppConfig } from '../config';
 import { publicConfig } from '../config';
@@ -33,6 +33,11 @@ const StudioBody = z.object({
   pricePln: z.coerce.number().nonnegative().max(1_000_000).optional(),
   description: z.string().max(2000).optional(),
 });
+
+/** Express 4 does not forward async errors; this does. */
+const wrap =
+  (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) =>
+    fn(req, res).catch(next);
 
 export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeline) {
   const r = Router();
@@ -67,7 +72,7 @@ export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeli
     res.status(202).json({ job: pipeline.enqueue(id, 'render') });
   });
 
-  r.post('/scan', async (_req, res) => res.json({ created: await pipeline.ingestFolder() }));
+  r.post('/scan', wrap(async (_req, res) => res.json({ created: await pipeline.ingestFolder() })));
 
   r.get('/jobs', (_req, res) => res.json({ jobs: store.listJobs().slice(0, 200) }));
 
@@ -85,7 +90,7 @@ export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeli
   });
 
   /** Studio upload: drop the photo into INPUT_DIR so it flows through the same pipeline. */
-  r.post('/vton/generate', async (req, res) => {
+  r.post('/vton/generate', wrap(async (req, res) => {
     const body = StudioBody.parse(req.body);
     const m = body.garmentImageUrl.match(/^data:image\/([a-z]+);base64,(.*)$/s)!;
     const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
@@ -102,7 +107,7 @@ export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeli
     await pipeline.ingestItem(key, [`${key}/front.${ext}`]);
     const job = store.listJobs().find((j) => j.itemId === key);
     res.status(202).json({ itemId: key, jobId: job?.id });
-  });
+  }));
 
   return r;
 }
