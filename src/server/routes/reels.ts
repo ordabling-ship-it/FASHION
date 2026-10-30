@@ -28,11 +28,28 @@ export function itemView(c: AppConfig, item: Item) {
 const IdParam = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/) });
 const ScriptBody = z.object({ scriptText: z.string().trim().min(10).max(2000) });
 const StudioBody = z.object({
-  garmentImageUrl: z.string().regex(/^data:image\/(png|jpe?g|webp|heic);base64,/, 'garmentImageUrl must be an image data URL'),
+  garmentImageUrl: z
+    .string()
+    .max(30_000_000)
+    .refine((v) => /^data:image\/(png|jpe?g|webp|heic);base64,/.test(v) || /^https:\/\//.test(v), 'garmentImageUrl must be an image data URL or https URL'),
   title: z.string().trim().max(120).optional(),
   pricePln: z.coerce.number().nonnegative().max(1_000_000).optional(),
   description: z.string().max(2000).optional(),
 });
+
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+async function loadImage(url: string): Promise<{ ext: string; bytes: Buffer }> {
+  const m = url.match(/^data:image\/([a-z]+);base64,(.*)$/s);
+  if (m) return { ext: m[1] === 'jpeg' ? 'jpg' : m[1], bytes: Buffer.from(m[2], 'base64') };
+  const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15_000) });
+  const type = res.headers.get('content-type') ?? '';
+  const t = type.match(/^image\/(png|jpe?g|webp|heic)/);
+  if (!res.ok || !t) throw Object.assign(new Error('Could not download an image from garmentImageUrl'), { status: 400 });
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length > MAX_IMAGE_BYTES) throw Object.assign(new Error('Image too large'), { status: 400 });
+  return { ext: t[1] === 'jpeg' ? 'jpg' : t[1], bytes };
+}
 
 /** Express 4 does not forward async errors; this does. */
 const wrap =
@@ -92,14 +109,13 @@ export function reelsRouter(c: AppConfig, store: JsonStore, pipeline: ReelPipeli
   /** Studio upload: drop the photo into INPUT_DIR so it flows through the same pipeline. */
   r.post('/vton/generate', wrap(async (req, res) => {
     const body = StudioBody.parse(req.body);
-    const m = body.garmentImageUrl.match(/^data:image\/([a-z]+);base64,(.*)$/s)!;
-    const ext = m[1] === 'jpeg' ? 'jpg' : m[1];
+    const { ext, bytes } = await loadImage(body.garmentImageUrl);
     const base = slugify(body.title || 'studio-item');
     let key = base;
     for (let n = 2; store.getItem(key); n++) key = `${base}-${n}`;
     const dir = path.join(c.inputDir, key);
     await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(path.join(dir, `front.${ext}`), Buffer.from(m[2], 'base64'));
+    await fs.writeFile(path.join(dir, `front.${ext}`), bytes);
     await fs.writeFile(
       path.join(dir, 'info.json'),
       JSON.stringify({ name: body.title || undefined, price: body.pricePln, notes: body.description }, null, 2),

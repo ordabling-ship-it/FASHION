@@ -220,7 +220,8 @@ export class ReelPipeline extends EventEmitter {
       case 'analyze': {
         if (!item.photos.length) throw new Error('Item has no photos');
         const analysis = await p.analysis.analyzeGarment(item.photos.map(toImageInput), item.info);
-        this.store.patchItem(itemId, { analysis, name: item.info.name ?? analysis.productName });
+        const name = item.info.name ?? (p.analysis.name === 'mock' ? item.name : analysis.productName);
+        this.store.patchItem(itemId, { analysis, name });
         break;
       }
       case 'tryon': {

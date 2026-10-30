@@ -83,7 +83,7 @@ describe('pipeline orchestration (mock providers)', () => {
     const { pipeline, store } = bootstrap({ config, log: () => {} });
     const app = createApp(config, store, pipeline);
     await request(app).put('/api/items/../etc/script').send({ scriptText: 'x' }).expect(404);
-    await request(app).post('/api/vton/generate').send({ garmentImageUrl: 'http://evil' }).expect(400);
+    await request(app).post('/api/vton/generate').send({ garmentImageUrl: 'http://insecure.example/x.jpg' }).expect(400);
     await request(app).get('/api/jobs/nope').expect(404);
     const health = await request(app).get('/api/health').expect(200);
     expect(health.body.demoMode).toBe(true);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { UploadZone } from './components/UploadZone';
 import { VideoPlayer } from './components/VideoPlayer';
@@ -8,12 +8,15 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { MultichannelModal } from './components/MultichannelModal';
 import { MarketplaceDashboard } from './components/MarketplaceDashboard';
 import { ApiSettingsModal } from './components/ApiSettingsModal';
+import { ReelsDashboard } from './components/ReelsDashboard';
+import { DemoBanner } from './components/DemoBanner';
+import { JobDto, PublicConfigDto, reelsApi } from './lib/reelsApi';
 import { SAMPLE_PRODUCTS, PRESET_GARMENTS } from './data/sampleProducts';
 import { ProductItem, TryOnGenerationConfig } from './types';
 import { Sparkles, ChevronLeft, ChevronRight, Film, ShieldCheck } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'studio' | 'storefront' | 'marketplace' | 'api-hub'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'reels' | 'storefront' | 'marketplace' | 'api-hub'>('studio');
   const [products, setProducts] = useState<ProductItem[]>(SAMPLE_PRODUCTS);
   const [selectedProductIndex, setSelectedProductIndex] = useState(0);
 
@@ -22,38 +25,79 @@ export default function App() {
   const [currentGenerationConfig, setCurrentGenerationConfig] = useState<TryOnGenerationConfig | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isMultichannelOpen, setIsMultichannelOpen] = useState(false);
+  const [generationJobId, setGenerationJobId] = useState<string | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [appConfig, setAppConfig] = useState<PublicConfigDto | null>(null);
+
+  useEffect(() => {
+    reelsApi.config().then(setAppConfig).catch(() => setAppConfig(null));
+  }, []);
   const [targetSyncProduct, setTargetSyncProduct] = useState<ProductItem | null>(null);
 
   const currentProduct = products[selectedProductIndex] || products[0];
 
   const handleStartGeneration = async (config: TryOnGenerationConfig) => {
     setCurrentGenerationConfig(config);
+    setGenerationError(null);
+    setGenerationJobId(null);
     setIsGenerating(true);
 
     try {
-      // Call backend API /api/vton/generate
+      // Saves the photo into INPUT_DIR and enqueues the same pipeline used for the watched folder.
       const res = await fetch('/api/vton/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
       });
       const data = await res.json();
-
-      if (data.product) {
-        // Add newly generated product to state
-        setProducts((prev) => [data.product, ...prev]);
-        setSelectedProductIndex(0);
-      }
-    } catch (err) {
-      console.error('Błąd podczas generowania VTON:', err);
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setGenerationJobId(data.jobId);
+    } catch (err: any) {
+      console.error('Błąd podczas generowania rolki:', err);
+      setGenerationError(err.message || 'Błąd generowania');
     }
   };
 
-  const handleGenerationModalComplete = () => {
-    setIsGenerating(false);
-    // Switch view to the landing page reel player!
-    setActiveTab('storefront');
-  };
+  const handleGenerationModalComplete = useCallback(
+    async (job: JobDto) => {
+      setIsGenerating(false);
+      setGenerationJobId(null);
+      try {
+        const { item } = await reelsApi.item(job.itemId);
+        if (!item.reelUrl) {
+          // REVIEW_BEFORE_RENDER: script is ready for editing in the dashboard.
+          setActiveTab('reels');
+          return;
+        }
+        const cfg = currentGenerationConfig;
+        const product: ProductItem = {
+          id: item.id,
+          title: item.name,
+          description: item.script?.caption ?? cfg?.description ?? '',
+          pricePln: item.info.price ?? cfg?.pricePln ?? 0,
+          size: cfg?.size ?? 'M',
+          category: cfg?.category ?? 'Sukienki',
+          condition: cfg?.condition ?? 'Bardzo dobry',
+          brand: cfg?.brand ?? '',
+          originalGarmentPhotoUrl: cfg?.garmentImageUrl ?? '',
+          tryOnPhotoUrl: item.tryOnImageUrl ?? cfg?.garmentImageUrl ?? '',
+          reelVideoUrl: item.reelUrl,
+          reelPosterUrl: item.tryOnImageUrl ?? '',
+          tags: ['AI-generated', '9:16 Reel'],
+          createdAt: item.createdAt,
+          modelArchetype: cfg?.modelArchetype ?? 'female_studio',
+          motionStyle: cfg?.motionStyle ?? 'runway_walk',
+        };
+        setProducts((prev) => [product, ...prev.filter((p) => p.id !== product.id)]);
+        setSelectedProductIndex(0);
+        setActiveTab('storefront');
+      } catch (err) {
+        console.error(err);
+        setActiveTab('reels');
+      }
+    },
+    [currentGenerationConfig],
+  );
 
   const handleQuickTrySample = () => {
     setActiveTab('storefront');
@@ -107,6 +151,8 @@ export default function App() {
         onQuickTrySample={handleQuickTrySample}
       />
 
+      <DemoBanner config={appConfig} />
+
       {/* Main View Router */}
       <main className="flex-1 pb-16">
         {activeTab === 'studio' && (
@@ -115,6 +161,8 @@ export default function App() {
             isGenerating={isGenerating}
           />
         )}
+
+        {activeTab === 'reels' && <ReelsDashboard config={appConfig} />}
 
         {activeTab === 'storefront' && (
           <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6">
@@ -187,10 +235,10 @@ export default function App() {
 
       {/* Sleek Interface Footer */}
       <footer className="h-8 border-t border-white/10 bg-[#050505] flex items-center px-4 sm:px-8 justify-between text-[10px] text-white/30 uppercase tracking-[0.2em] font-mono">
-        <div>Engine Version 1.0.4-stable</div>
+        <div>{appConfig?.demoMode ? 'DEMO MODE • mock providers' : 'Live providers'}</div>
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>Latency: 24ms • API: Healthy</span>
+          <span>AI-generated content is labeled (EU AI Act)</span>
         </div>
       </footer>
 
@@ -198,7 +246,10 @@ export default function App() {
       <AILoaderModal
         isOpen={isGenerating}
         config={currentGenerationConfig}
+        jobId={generationJobId}
+        error={generationError}
         onComplete={handleGenerationModalComplete}
+        onClose={() => setIsGenerating(false)}
       />
 
       {/* Stripe Checkout Modal (BLIK, Apple Pay, Cards) */}

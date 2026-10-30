@@ -1,9 +1,9 @@
 import React from 'react';
-import { Sparkles, ShoppingBag, Share2, Settings, Zap, ArrowRight } from 'lucide-react';
+import { Film, Sparkles, ShoppingBag, Share2, Settings, Zap, ArrowRight } from 'lucide-react';
 
 interface NavbarProps {
-  activeTab: 'studio' | 'storefront' | 'marketplace' | 'api-hub';
-  setActiveTab: (tab: 'studio' | 'storefront' | 'marketplace' | 'api-hub') => void;
+  activeTab: 'studio' | 'reels' | 'storefront' | 'marketplace' | 'api-hub';
+  setActiveTab: (tab: 'studio' | 'reels' | 'storefront' | 'marketplace' | 'api-hub') => void;
   productsCount: number;
   onQuickTrySample: () => void;
 }
@@ -48,6 +48,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>Studio VTON</span>
+          </button>
+
+          <button
+            id="tab-reels"
+            onClick={() => setActiveTab('reels')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
+              activeTab === 'reels'
+                ? 'bg-white text-black font-semibold shadow-sm'
+                : 'text-white/50 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Film className="w-3.5 h-3.5" />
+            <span>Rolki</span>
           </button>
 
           <button
