@@ -6,6 +6,8 @@ import { ReplicateTryOnProvider } from './replicate';
 import { ElevenLabsTtsProvider } from './elevenlabs';
 import { MockAnalysisProvider, MockScriptProvider, MockTryOnProvider, MockTtsProvider, NoLipSyncProvider } from './mock';
 
+import { GeminiSearchTrendsSource, StaticTrendsSource } from '../services/trends';
+
 export * from './types';
 
 export function createProviders(c: AppConfig): Providers {
@@ -16,6 +18,7 @@ export function createProviders(c: AppConfig): Providers {
       tryOn: new MockTryOnProvider(),
       tts: new MockTtsProvider(c.FFMPEG_PATH),
       lipSync: new NoLipSyncProvider(),
+      trends: new StaticTrendsSource('mock'),
     };
   }
   const gemini = new GeminiProvider(c.GEMINI_API_KEY!, c.GEMINI_MODEL);
@@ -29,5 +32,6 @@ export function createProviders(c: AppConfig): Providers {
     ? new ElevenLabsTtsProvider(c.ELEVENLABS_API_KEY!, c.ELEVENLABS_VOICE_ID, c.ELEVENLABS_MODEL_ID)
     : new MockTtsProvider(c.FFMPEG_PATH);
   const lipSync = c.LIPSYNC_PROVIDER === 'fal' ? new FalLipSyncProvider(c.FAL_KEY!, c.FAL_LIPSYNC_MODEL) : new NoLipSyncProvider();
-  return { analysis: gemini, script: gemini, tryOn, tts, lipSync };
+  const trends = new GeminiSearchTrendsSource(c.GEMINI_API_KEY!, c.GEMINI_MODEL);
+  return { analysis: gemini, script: gemini, tryOn, tts, lipSync, trends };
 }

@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import { GoogleGenAI } from '@google/genai';
 import { GarmentAnalysisSchema, ReelScriptSchema, type GarmentAnalysis, type ItemInfo, type ReelScript } from '../types';
-import type { AnalysisProvider, ImageInput, ScriptProvider } from './types';
+import type { AnalysisProvider, ImageInput, ScriptProvider, TrendHints } from './types';
 import { analysisPrompt, scriptPrompt } from './prompts';
 import { extractJson } from './util';
 
@@ -30,7 +30,7 @@ export class GeminiProvider implements AnalysisProvider, ScriptProvider {
     return GarmentAnalysisSchema.parse(await this.json([...imageParts, { text: analysisPrompt(info) }]));
   }
 
-  async writeScript(args: { analysis: GarmentAnalysis; info: ItemInfo; language: 'pl' | 'en' }): Promise<ReelScript> {
-    return ReelScriptSchema.parse(await this.json([{ text: scriptPrompt(args.analysis, args.info, args.language) }]));
+  async writeScript(args: { analysis: GarmentAnalysis; info: ItemInfo; language: 'pl' | 'en'; trends?: TrendHints }): Promise<ReelScript> {
+    return ReelScriptSchema.parse(await this.json([{ text: scriptPrompt(args.analysis, args.info, args.language, args.trends) }]));
   }
 }

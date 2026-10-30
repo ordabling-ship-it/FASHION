@@ -5,6 +5,11 @@ export interface ImageInput {
   mimeType: string;
 }
 
+export interface TrendHints {
+  hookStyles: string[];
+  hashtags: string[];
+}
+
 export interface AnalysisProvider {
   readonly name: string;
   analyzeGarment(images: ImageInput[], info: ItemInfo): Promise<GarmentAnalysis>;
@@ -16,6 +21,7 @@ export interface ScriptProvider {
     analysis: GarmentAnalysis;
     info: ItemInfo;
     language: 'pl' | 'en';
+    trends?: TrendHints;
   }): Promise<ReelScript>;
 }
 
@@ -43,4 +49,5 @@ export interface Providers {
   tryOn: TryOnProvider;
   tts: TtsProvider;
   lipSync: LipSyncProvider;
+  trends: import('../services/trends').TrendsSource;
 }
