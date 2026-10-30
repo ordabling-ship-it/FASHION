@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Reels pipeline runtime folders
+/input/
+/output/
+/data/
